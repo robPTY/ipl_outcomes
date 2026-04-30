@@ -3,17 +3,19 @@ from pathlib import Path
 import pandas as pd
 
 
-DELIVERIES_IN = Path("deliveries_clean.csv")
-BATTER_MATCH_OUT = Path("batter_match_clean.csv")
-LEGACY_BATSMAN_MATCH_OUT = Path("batsman_match.csv")
+CSV_DIR = Path("csv_files")
+DELIVERIES_IN = CSV_DIR / "deliveries_clean.csv"
+BATTER_MATCH_OUT = CSV_DIR / "batter_match_clean.csv"
 
 
 def first_non_null(series):
+    # Keep the first real value when grouping match-level fields
     values = series.dropna()
     return values.iloc[0] if not values.empty else None
 
 
 def build_batting_positions(df):
+    # Use the first delivery each batter faced to estimate batting order
     first_seen = (
         df.groupby(["match_id", "innings_number", "batting_team", "batter"], as_index=False)
         .agg(first_delivery=("delivery_number", "min"))
@@ -29,6 +31,8 @@ def build_batting_positions(df):
 
 def build_batter_match(df):
     df = df.copy()
+
+    # Create helper columns used by the groupby aggregation
     df["is_legal_ball"] = df["is_legal_ball"].astype(bool)
     df["batter_dismissed"] = df["batter_dismissed"].astype(bool)
     df["dismissal_kind"] = df["wicket_kind"].where(df["batter_dismissed"])
@@ -37,6 +41,7 @@ def build_batter_match(df):
     df["middle_overs_legal_ball"] = df["is_legal_ball"] & (df["phase"] == "middle")
     df["death_overs_legal_ball"] = df["is_legal_ball"] & (df["phase"] == "death")
 
+    # These columns identify one batter innings within a match
     group_cols = [
         "match_id",
         "season",
@@ -50,6 +55,7 @@ def build_batter_match(df):
         "batter_id",
     ]
 
+    # Collapse ball-by-ball rows into one row per batter per match
     batter_match = (
         df.groupby(group_cols, dropna=False)
         .agg(
@@ -75,6 +81,7 @@ def build_batter_match(df):
         .reset_index()
     )
 
+    # Add batter outcome columns that are useful for modeling
     batter_match["strike_rate"] = (
         batter_match["runs_scored"] / batter_match["balls_faced"].replace(0, pd.NA) * 100
     )
@@ -85,6 +92,7 @@ def build_batter_match(df):
     batter_match["out_for_duck"] = batter_match["dismissed"] & (batter_match["runs_scored"] == 0)
     batter_match["team_won"] = batter_match["batting_team"] == batter_match["match_winner"]
 
+    # Add batting position after aggregation
     positions = build_batting_positions(df)
     batter_match = batter_match.merge(
         positions,
@@ -92,6 +100,7 @@ def build_batter_match(df):
         how="left",
     )
 
+    # Keep the output columns in a predictable order
     ordered_cols = [
         "match_id",
         "season",
@@ -135,22 +144,16 @@ def build_batter_match(df):
 
 
 def main() -> int:
+    # Read cleaned deliveries and write one row per batter per match
+    CSV_DIR.mkdir(exist_ok=True)
     deliveries = pd.read_csv(DELIVERIES_IN, low_memory=False)
     batter_match = build_batter_match(deliveries)
     batter_match.to_csv(BATTER_MATCH_OUT, index=False)
 
-    # keeping old names
-    batter_match.rename(
-        columns={
-            "batter": "batsman",
-            "bowling_team": "opponent_team",
-        }
-    ).to_csv(LEGACY_BATSMAN_MATCH_OUT, index=False)
-
     print("Batter-match aggregation complete")
-    print(f"  Batter-match rows: {len(batter_match):,}")
-    print(f"  Matches represented: {batter_match['match_id'].nunique():,}")
-    print(f"  Missing batter IDs: {batter_match['batter_id'].isna().sum():,}")
+    print(f"Batter-match rows: {len(batter_match):,}")
+    print(f"Matches represented: {batter_match['match_id'].nunique():,}")
+    print(f"Missing batter IDs: {batter_match['batter_id'].isna().sum():,}")
     return 0
 
 

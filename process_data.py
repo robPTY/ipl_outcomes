@@ -5,10 +5,9 @@ import yaml
 
 
 DATA_DIR = Path("data")
-MATCHES_OUT = Path("matches_clean.csv")
-DELIVERIES_OUT = Path("deliveries_clean.csv")
-PLAYER_MATCH_OUT = Path("player_match_clean.csv")
-LEGACY_MASTER_OUT = Path("master_ipl_dataset.csv")
+CSV_DIR = Path("csv_files")
+DELIVERIES_OUT = CSV_DIR / "deliveries_clean.csv"
+LEGACY_MASTER_OUT = CSV_DIR / "master_ipl_dataset.csv"
 
 EXTRA_TYPES = ("wides", "noballs", "byes", "legbyes", "penalty")
 NON_BATTER_DISMISSALS = {"retired hurt", "retired not out", "obstructing the field"}
@@ -217,6 +216,8 @@ def build_delivery_rows(match_id, info, innings):
 
 
 def write_outputs(yaml_files):
+    CSV_DIR.mkdir(exist_ok=True)
+
     match_rows = []
     delivery_rows = []
     player_rows = []
@@ -241,9 +242,7 @@ def write_outputs(yaml_files):
     deliveries = pd.DataFrame(delivery_rows)
     player_match = pd.DataFrame(player_rows)
 
-    matches.to_csv(MATCHES_OUT, index=False)
     deliveries.to_csv(DELIVERIES_OUT, index=False)
-    player_match.to_csv(PLAYER_MATCH_OUT, index=False)
 
     deliveries.rename(
         columns={
@@ -270,13 +269,13 @@ def write_outputs(yaml_files):
     ].to_csv(LEGACY_MASTER_OUT, index=False)
 
     print("Data cleaning complete")
-    print(f"  Matches: {len(matches):,}")
-    print(f"  Deliveries: {len(deliveries):,}")
-    print(f"  Player-match rows: {len(player_match):,}")
-    print(f"  Skipped non-IPL/T20 files: {len(skipped_files):,}")
-    print(f"  Missing batter IDs: {deliveries['batter_id'].isna().sum():,}")
-    print(f"  Missing bowler IDs: {deliveries['bowler_id'].isna().sum():,}")
-    print(f"  Missing venues: {matches['venue'].isna().sum():,}")
+    print(f"Matches: {len(matches):,}")
+    print(f"Deliveries: {len(deliveries):,}")
+    print(f"Player-match rows: {len(player_match):,}")
+    print(f"Skipped non-IPL/T20 files: {len(skipped_files):,}")
+    print(f"Missing batter IDs: {deliveries['batter_id'].isna().sum():,}")
+    print(f"Missing bowler IDs: {deliveries['bowler_id'].isna().sum():,}")
+    print(f"Missing venues: {matches['venue'].isna().sum():,}")
 
 
 def main() -> int:
